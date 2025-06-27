@@ -40,11 +40,13 @@ Alternatively, you can download 400 full-game logs (for `Phi-4-15b` and `Llama-3
 
 ## Deception ELO
 
-To reproduce our Deception ELO and Win Rate results, run:
+After running (or downloading) the games, to reproduce our Deception ELO results, run the following notebook:
 
 ```
-python elo/deception_elo.py
+reports/2025_02_26_deception_ELO_v3_ci.ipynb
 ```
+
+The other report files can be used to reproduce the respective results.
 
 ## Caching Activations
 
