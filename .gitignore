@@ -16,6 +16,9 @@ linear-probes/checkpoints/
 # evaluations/results
 evaluations/results/
 
+# wandb runs
+wandb/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
