@@ -33,7 +33,14 @@ TRAINING_INTERVAL = int(os.getenv("DPO_TRAINING_INTERVAL", "30")) # seconds
 # --- DPO and Model Setup (runs once at startup) ---
 def load_or_wait_for_model():
     print("Preparing base model and tokenizer for DPO training...")
-    bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4")
+    quant_mode = os.getenv("DPO_QUANTIZATION", "4bit").lower()
+    bnb_config = None
+    if quant_mode in {"4bit", "4", "four"}:
+        bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4")
+    elif quant_mode in {"8bit", "8", "eight"}:
+        bnb_config = BitsAndBytesConfig(load_in_8bit=True)
+    else:
+        bnb_config = None
 
     model_source = None
     if MODEL_PATH and os.path.exists(MODEL_PATH):
@@ -46,21 +53,23 @@ def load_or_wait_for_model():
         return None, None
 
     print(f"Loading model from: {model_source}")
-    base_model = AutoModelForCausalLM.from_pretrained(
-        model_source,
-        quantization_config=bnb_config,
-        trust_remote_code=True,
-        device_map="auto",
-    )
+    load_kwargs = dict(trust_remote_code=True, device_map="auto")
+    if bnb_config is not None:
+        load_kwargs["quantization_config"] = bnb_config
+    else:
+        # Prefer bfloat16 when not quantized (if supported by hardware)
+        load_kwargs["torch_dtype"] = torch.bfloat16 if torch.cuda.is_available() else None
+    base_model = AutoModelForCausalLM.from_pretrained(model_source, **load_kwargs)
     # Recommended setup for k-bit fine-tuning
     try:
-        base_model = prepare_model_for_kbit_training(base_model)
+        if bnb_config is not None:
+            base_model = prepare_model_for_kbit_training(base_model)
         if hasattr(base_model, "enable_input_require_grads"):
             base_model.enable_input_require_grads()
         if hasattr(base_model.config, "use_cache"):
             base_model.config.use_cache = False
     except Exception as e:
-        print(f"Warning: prepare_model_for_kbit_training failed: {e}")
+        print(f"Warning: prepare_model_for_kbit_training or model prep failed: {e}")
     tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -143,7 +152,14 @@ def load_or_wait_for_model():
                     attention_mask = (attention_mask > 0).to(dtype=attention_mask.dtype)
                 if position_ids is not None and input_ids is not None:
                     seq_len = input_ids.shape[-1]
-                    position_ids = torch.clamp(position_ids, 0, max(seq_len - 1, 0))
+                    limit = max(seq_len - 1, 0)
+                    try:
+                        max_pos = getattr(self.inner.config, "max_position_embeddings", None)
+                        if max_pos is not None:
+                            limit = min(limit, int(max_pos) - 1)
+                    except Exception:
+                        pass
+                    position_ids = torch.clamp(position_ids, 0, limit)
             except Exception as e:
                 print(f"[SafeForward] Warning during input sanitation: {e}")
             return self.inner(input_ids=input_ids, attention_mask=attention_mask, position_ids=position_ids, **kwargs)

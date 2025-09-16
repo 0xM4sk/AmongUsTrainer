@@ -118,6 +118,14 @@ This will populate `expt-logs/custom_agent_dataset.jsonl`, which the trainer wil
   - Optionally allow downloads (not recommended by default): `export ALLOW_HF_DOWNLOAD=true`
 - Run: `python continuous_trainer.py`
 
+- Quantization options:
+  - `DPO_QUANTIZATION=4bit` (default, nf4), `8bit`, or `none` (bf16 if available)
+  - If you see CUDA index asserts, try `DPO_QUANTIZATION=8bit` or `none` to rule out 4-bit issues.
+
+- Debug/safety:
+  - `DPO_SAFE_MODE=1` sets batch size to 1 and disables fp16
+  - `DPO_DEBUG=1` enables CUDA_LAUNCH_BLOCKING for better stacktraces
+
 Environment/config knobs:
 - `CUSTOM_AGENT_LOG_FILE` to override the log path (default: `expt-logs/custom_agent_dataset.jsonl`)
 - `DPO_BASE_MODEL_PATH` path to local model weights directory (preferred)
