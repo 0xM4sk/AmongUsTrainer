@@ -1,9 +1,12 @@
 import json
 import os
 import time
+import sys
 from collections import deque
 from peft import PeftModel, LoraConfig, get_peft_model
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments
+from packaging.version import Version
+import transformers as _hf_tfm
 try:
     # TRL >= 0.9 uses DPOConfig with DPOTrainer
     from trl import DPOTrainer, DPOConfig  # type: ignore
@@ -83,6 +86,16 @@ def create_dpo_dataset(data):
 
 if __name__ == "__main__":
     print("Starting continuous DPO training service...")
+    # Ensure compatible Transformers version for current TRL (processing_class support)
+    try:
+        if Version(_hf_tfm.__version__) < Version("4.46.0"):
+            print(
+                f"Transformers {_hf_tfm.__version__} is too old for current TRL; please install transformers>=4.46.0.\n"
+                "Run: pip install -r requirements.txt --upgrade --no-cache-dir"
+            )
+            sys.exit(1)
+    except Exception:
+        pass
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
