@@ -123,49 +123,8 @@ def load_or_wait_for_model():
     else:
         model = get_peft_model(base_model, lora_config)
 
-    class _SafeForward(torch.nn.Module):
-        def __init__(self, inner_model):
-            super().__init__()
-            self.inner = inner_model
-            try:
-                self.max_token_id = self.inner.get_input_embeddings().weight.shape[0] - 1
-            except Exception:
-                self.max_token_id = None
-
-        # Proxy attribute access (e.g., .config, .generate) to the inner model
-        def __getattr__(self, name):
-            try:
-                return super().__getattr__(name)
-            except AttributeError:
-                return getattr(self.inner, name)
-
-        def forward(self, input_ids=None, attention_mask=None, position_ids=None, **kwargs):
-            try:
-                if input_ids is not None and self.max_token_id is not None:
-                    with torch.no_grad():
-                        max_id = torch.max(input_ids).item()
-                        min_id = torch.min(input_ids).item()
-                        if max_id > self.max_token_id or min_id < 0:
-                            print(f"[SafeForward] Clamping token ids (min={min_id}, max={max_id}, limit={self.max_token_id})")
-                        input_ids = torch.clamp(input_ids, 0, self.max_token_id)
-                if attention_mask is not None:
-                    attention_mask = (attention_mask > 0).to(dtype=attention_mask.dtype)
-                if position_ids is not None and input_ids is not None:
-                    seq_len = input_ids.shape[-1]
-                    limit = max(seq_len - 1, 0)
-                    try:
-                        max_pos = getattr(self.inner.config, "max_position_embeddings", None)
-                        if max_pos is not None:
-                            limit = min(limit, int(max_pos) - 1)
-                    except Exception:
-                        pass
-                    position_ids = torch.clamp(position_ids, 0, limit)
-            except Exception as e:
-                print(f"[SafeForward] Warning during input sanitation: {e}")
-            return self.inner(input_ids=input_ids, attention_mask=attention_mask, position_ids=position_ids, **kwargs)
-
-    # Wrap model to guard against OOB indices causing CUDA asserts
-    model = _SafeForward(model)
+    # Do NOT wrap the PeftModel; DPOTrainer must see a trainable PeftModel to avoid
+    # 'purely quantized' errors. We rely on embedding resize + length caps above.
 
     return model, tokenizer
 
