@@ -156,7 +156,7 @@ if __name__ == "__main__":
                     model=model,
                     ref_model=None,
                     train_dataset=dpo_dataset,
-                    tokenizer=tokenizer,
+                    processing_class=tokenizer,
                     args=dpo_args,
                 )
             else:
