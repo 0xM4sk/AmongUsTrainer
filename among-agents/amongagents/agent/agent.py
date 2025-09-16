@@ -173,6 +173,14 @@ class LLMAgent(Agent):
         }
         if self.litellm_api_base:
             kwargs["api_base"] = self.litellm_api_base
+            # Heuristic: if pointing to LiteLLM proxy or OpenAI-compatible server, use openai-style
+            custom_provider_env = os.getenv("LITELLM_CUSTOM_PROVIDER")
+            if custom_provider_env:
+                kwargs["custom_llm_provider"] = custom_provider_env
+            else:
+                base_lower = self.litellm_api_base.lower()
+                if "/v1" in base_lower or ":4000" in base_lower:
+                    kwargs["custom_llm_provider"] = "openai"
         if self.litellm_api_key:
             kwargs["api_key"] = self.litellm_api_key
 

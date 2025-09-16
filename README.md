@@ -58,10 +58,12 @@ Run a local OpenAI-compatible proxy with LiteLLM and route to Ollama.
 
 2) Launch the LiteLLM proxy using the provided configuration:
    - `litellm --config config.yaml --port 4000`
+   - The proxy exposes OpenAI-compatible routes at `/v1/...` and maps `model=ollama/qwen:7b-chat` to your local Ollama.
 
 3) Point the game to the proxy (OpenAI-compatible endpoint):
    - `export LITELLM_API_BASE=http://localhost:4000`
    - `export LITELLM_MODEL=ollama/qwen:7b-chat`
+   - Optional: `export LITELLM_CUSTOM_PROVIDER=openai` to force OpenAI-style calls when using the proxy.
 
 You can still override models per run using CLI args `--crewmate_llm` and `--impostor_llm` with any LiteLLM-supported `provider/model` string.
 
@@ -73,6 +75,7 @@ This repo includes a simple preference data generator (`custom_agent.py`) and a 
 - Default: Uses this repo’s LiteLLM proxy (`config.yaml`) on port 4000
   - Run: `litellm --config config.yaml --port 4000`
   - Env defaults in `custom_agent.py`: `LITELLM_API_BASE=http://localhost:4000`, `LITELLM_MODEL=ollama/qwen:7b-chat`
+  - Optional: `LITELLM_CUSTOM_PROVIDER=openai` (recommended for proxy)
 - Alternative backends:
   - vLLM: start API on 8000: `python -m vllm.entrypoints.openai.api_server --model Qwen/Qwen1.5-7B-Chat --port 8000`, then set `LITELLM_API_BASE=http://localhost:8000/v1`, `LITELLM_MODEL=qwen/qwen1.5-7b-chat`
   - Ollama direct: set `LITELLM_API_BASE=http://localhost:11434`, `LITELLM_MODEL=ollama/qwen:7b-chat`

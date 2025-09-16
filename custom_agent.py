@@ -110,6 +110,14 @@ def generate_preference_pair(game_state, intuitive_state, critical_state):
             "api_base": api_base,
             "response_format": {"type": "json_object"},
         }
+        # Provider detection / override for proxy vs direct backends
+        custom_provider_env = os.getenv("LITELLM_CUSTOM_PROVIDER")
+        if custom_provider_env:
+            kwargs["custom_llm_provider"] = custom_provider_env
+        else:
+            base_lower = str(api_base).lower()
+            if "/v1" in base_lower or ":4000" in base_lower:
+                kwargs["custom_llm_provider"] = "openai"
         if api_key:
             kwargs["api_key"] = api_key
         response = client(**kwargs)
