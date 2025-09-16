@@ -102,6 +102,13 @@ def load_or_wait_for_model():
             except Exception:
                 self.max_token_id = None
 
+        # Proxy attribute access (e.g., .config, .generate) to the inner model
+        def __getattr__(self, name):
+            try:
+                return super().__getattr__(name)
+            except AttributeError:
+                return getattr(self.inner, name)
+
         def forward(self, input_ids=None, attention_mask=None, position_ids=None, **kwargs):
             try:
                 if input_ids is not None and self.max_token_id is not None:
