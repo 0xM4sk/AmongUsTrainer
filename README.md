@@ -12,8 +12,8 @@ The aim is to simulate the popular multiplayer game "Among Us" using AI agents a
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/7vik/AmongUs.git
-   cd AmongUs
+   git clone [https://github.com/0xM4sk/AmongUsTrainer]
+   cd AmongUsTrainer
    ```
 
 2. Set up the environment:
@@ -140,4 +140,4 @@ This project is licensed under CC0 1.0 Universal - see [LICENSE](LICENSE).
 
 - Our game logic uses a bunch of code from [AmongAgents](https://github.com/cyzus/among-agents).
 
-If you face any bugs or issues with this codebase, please contact Satvik Golechha (7vik) at zsatvik@gmail.com.
+- Forked from Satvik Golechha (7vik) (https://github.com/7vik/AmongUs)
