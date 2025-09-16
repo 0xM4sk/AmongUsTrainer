@@ -7,6 +7,14 @@ deception-detection/
 # expt-logs
 expt-logs/
 
+# Data and model artifacts (keep out of Git)
+data/
+models/
+*.safetensors
+*.bin
+*.ckpt
+*.pt
+
 # probes/TransformerLens
 linear-probes/TransformerLens/
 linear-probes/data/

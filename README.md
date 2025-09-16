@@ -222,6 +222,7 @@ You will need to add a `.env` file with a Goodfire API key.
 ├── main.py                  # Main entry point for running the game
 ├── notebooks                # Additional notebooks (not part of the main project)
 ├── reports                  # Experiment reports
+├── data                     # (Ignored) Local datasets and artifacts
 ├── requirements.txt         # Python dependencies for main project
 ├── tests                    # Unit tests for project functionality
 └── utils.py                 # Utility functions
@@ -230,6 +231,27 @@ You will need to add a `.env` file with a Goodfire API key.
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to this project.
+
+## Version Control
+
+We follow a simple Trunk‑Based Development strategy tailored for rapid, agentic iteration:
+
+- main: Protected, always green, production‑ready state of the agent.
+- feature/*: One short‑lived branch per experiment (e.g., prompt tweaks, new heuristic/tooling).
+  - Example: `git checkout -b feature/improved-critical-heuristic`
+  - Open a PR into `main` when ready; require review + CI green.
+
+Data and model versioning
+- Do not commit large artifacts to Git (datasets, model weights, logs).
+- The `data/` directory is ignored; treat it as ephemeral local cache.
+- Options for tracking versions without bloating Git:
+  - Git‑LFS for large blobs (weights, checkpoints).
+  - DVC for data/weights with remote storage (e.g., S3/GCS) and reproducible pipelines.
+
+Suggested setup
+- Keep code changes small and isolated per `feature/*` branch.
+- Pin experiment context in PRs (model name, proxy config, seeds) so results are reproducible.
+- Store run outputs in external storage (W&B, cloud buckets) and link from PRs.
 
 ## License
 
