@@ -4,7 +4,14 @@ import time
 from collections import deque
 from peft import PeftModel, LoraConfig, get_peft_model
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments
-from trl import DPOTrainer
+try:
+    # TRL >= 0.9 uses DPOConfig with DPOTrainer
+    from trl import DPOTrainer, DPOConfig  # type: ignore
+    HAS_DPO_CONFIG = True
+except Exception:
+    from trl import DPOTrainer  # type: ignore
+    DPOConfig = None  # type: ignore
+    HAS_DPO_CONFIG = False
 from datasets import Dataset
 import torch
 
@@ -106,53 +113,57 @@ if __name__ == "__main__":
             mini_batch_data = list(experience_buffer)
             dpo_dataset = create_dpo_dataset(mini_batch_data)
             
-            # Build TrainingArguments once
-            training_args = TrainingArguments(
-                output_dir=CHECKPOINT_DIR,
-                per_device_train_batch_size=BATCH_SIZE,
-                num_train_epochs=1,
-                learning_rate=5e-5,
-                save_strategy="epoch",
-                logging_steps=1,
-                fp16=True,
-                disable_tqdm=True,
-            )
-
-            # Ensure compatibility with TRL versions expecting DPOTrainingArguments
-            # Add commonly used DPO-specific attributes if missing
-            defaults = {
-                "beta": 0.1,
-                "label_smoothing": 0.0,
-                "loss_type": "sigmoid",
-                "padding_value": -100,
-                "truncation_side": "right",
-                "max_length": 1024,
-                "max_prompt_length": 512,
-                "max_target_length": 512,
-            }
-            for k, v in defaults.items():
-                if not hasattr(training_args, k):
-                    try:
-                        setattr(training_args, k, v)
-                    except Exception:
-                        pass
-
-            # Be compatible across TRL versions: try with tokenizer, then fallback
-            try:
+            if HAS_DPO_CONFIG and DPOConfig is not None:
+                # Use the modern TRL config API
+                dpo_args = DPOConfig(
+                    output_dir=CHECKPOINT_DIR,
+                    per_device_train_batch_size=BATCH_SIZE,
+                    num_train_epochs=1,
+                    learning_rate=5e-5,
+                    logging_steps=1,
+                    fp16=True,
+                    beta=0.1,
+                    padding_value=-100,
+                    truncation_side="right",
+                    max_length=1024,
+                    max_prompt_length=512,
+                    max_target_length=512,
+                    report_to=None,
+                )
                 dpo_trainer = DPOTrainer(
                     model=model,
                     ref_model=None,
                     train_dataset=dpo_dataset,
                     tokenizer=tokenizer,
-                    args=training_args,
+                    args=dpo_args,
                 )
-            except TypeError:
-                dpo_trainer = DPOTrainer(
-                    model=model,
-                    ref_model=None,
-                    train_dataset=dpo_dataset,
-                    args=training_args,
+            else:
+                # Fallback for older TRL versions expecting TrainingArguments
+                training_args = TrainingArguments(
+                    output_dir=CHECKPOINT_DIR,
+                    per_device_train_batch_size=BATCH_SIZE,
+                    num_train_epochs=1,
+                    learning_rate=5e-5,
+                    save_strategy="epoch",
+                    logging_steps=1,
+                    fp16=True,
+                    disable_tqdm=True,
                 )
+                try:
+                    dpo_trainer = DPOTrainer(
+                        model=model,
+                        ref_model=None,
+                        train_dataset=dpo_dataset,
+                        tokenizer=tokenizer,
+                        args=training_args,
+                    )
+                except TypeError:
+                    dpo_trainer = DPOTrainer(
+                        model=model,
+                        ref_model=None,
+                        train_dataset=dpo_dataset,
+                        args=training_args,
+                    )
             
             dpo_trainer.train()
             dpo_trainer.save_model(os.path.join(CHECKPOINT_DIR, LORA_ADAPTER_NAME))
