@@ -118,6 +118,25 @@ if __name__ == "__main__":
                 disable_tqdm=True,
             )
 
+            # Ensure compatibility with TRL versions expecting DPOTrainingArguments
+            # Add commonly used DPO-specific attributes if missing
+            defaults = {
+                "beta": 0.1,
+                "label_smoothing": 0.0,
+                "loss_type": "sigmoid",
+                "padding_value": -100,
+                "truncation_side": "right",
+                "max_length": 1024,
+                "max_prompt_length": 512,
+                "max_target_length": 512,
+            }
+            for k, v in defaults.items():
+                if not hasattr(training_args, k):
+                    try:
+                        setattr(training_args, k, v)
+                    except Exception:
+                        pass
+
             # Be compatible across TRL versions: try with tokenizer, then fallback
             try:
                 dpo_trainer = DPOTrainer(
