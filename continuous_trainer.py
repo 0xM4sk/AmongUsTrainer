@@ -14,7 +14,7 @@ CHECKPOINT_DIR = os.getenv("DPO_CHECKPOINT_DIR", "./dpo_checkpoints")
 # Prefer a local model path to avoid remote downloads. If not set and ALLOW_HF_DOWNLOAD is not true, training waits.
 MODEL_PATH = os.getenv("DPO_BASE_MODEL_PATH")
 MODEL_NAME = os.getenv("DPO_BASE_MODEL_NAME", "Qwen/Qwen1.5-7B-Chat")
-ALLOW_HF_DOWNLOAD = os.getenv("ALLOW_HF_DOWNLOAD", "false").lower() in {"1", "true", "yes"}
+ALLOW_HF_DOWNLOAD = os.getenv("ALLOW_HF_DOWNLOAD", "true").lower() in {"1", "true", "yes"}
 LORA_ADAPTER_NAME = os.getenv("DPO_LORA_ADAPTER_NAME", "dpo_adapter")
 BUFFER_SIZE = int(os.getenv("DPO_BUFFER_SIZE", "500"))  # Number of recent turns to keep in memory
 BATCH_SIZE = int(os.getenv("DPO_BATCH_SIZE", "8"))
@@ -109,7 +109,6 @@ if __name__ == "__main__":
             dpo_trainer = DPOTrainer(
                 model=model,
                 ref_model=None,
-                beta=0.1,
                 train_dataset=dpo_dataset,
                 tokenizer=tokenizer,
                 args=TrainingArguments(
