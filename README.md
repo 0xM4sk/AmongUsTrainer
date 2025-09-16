@@ -70,15 +70,12 @@ You can still override models per run using CLI args `--crewmate_llm` and `--imp
 This repo includes a simple preference data generator (`custom_agent.py`) and a continuous DPO trainer (`continuous_trainer.py`) to fine-tune models based on agent gameplay-style preferences.
 
 ### 1) Configure the LLM backend for `custom_agent.py`
-- Option A: vLLM (default in `custom_agent.py`)
-  - Start vLLM with a chat model, e.g.: `python -m vllm.entrypoints.openai.api_server --model Qwen/Qwen1.5-7B-Chat --port 8000`
-  - Env vars (optional):
-    - `LITELLM_API_BASE` (default: `http://localhost:8000/v1`)
-    - `LITELLM_MODEL` (default: `qwen/qwen1.5-7b-chat`)
-    - `LITELLM_API_KEY` if your backend requires it
-- Option B: Ollama
-  - `ollama pull qwen:7b-chat`
-  - Set env vars: `export LITELLM_API_BASE=http://localhost:11434` and `export LITELLM_MODEL=ollama/qwen:7b-chat`
+- Default: Uses this repo’s LiteLLM proxy (`config.yaml`) on port 4000
+  - Run: `litellm --config config.yaml --port 4000`
+  - Env defaults in `custom_agent.py`: `LITELLM_API_BASE=http://localhost:4000`, `LITELLM_MODEL=ollama/qwen:7b-chat`
+- Alternative backends:
+  - vLLM: start API on 8000: `python -m vllm.entrypoints.openai.api_server --model Qwen/Qwen1.5-7B-Chat --port 8000`, then set `LITELLM_API_BASE=http://localhost:8000/v1`, `LITELLM_MODEL=qwen/qwen1.5-7b-chat`
+  - Ollama direct: set `LITELLM_API_BASE=http://localhost:11434`, `LITELLM_MODEL=ollama/qwen:7b-chat`
 
 ### 2) Generate preference data with `custom_agent.py`
 `custom_agent.agent_play_turn(game_state)` expects a `game_state` dict like:
@@ -104,12 +101,18 @@ The file is created automatically if missing.
 
 - Install training deps (already in `requirements.txt`): `transformers`, `trl`, `peft`, `datasets`, `bitsandbytes`, `accelerate`.
 - Ensure GPU drivers and CUDA are available if training on GPU.
+- Provide a local model directory to avoid remote downloads:
+  - `export DPO_BASE_MODEL_PATH=/path/to/local/Qwen1.5-7B-Chat`
+  - Optionally allow downloads (not recommended by default): `export ALLOW_HF_DOWNLOAD=true`
 - Run: `python continuous_trainer.py`
 
 Environment/config knobs:
 - `CUSTOM_AGENT_LOG_FILE` to override the log path (default: `expt-logs/custom_agent_dataset.jsonl`)
-- `MODEL_NAME` inside `continuous_trainer.py` to change the base model for training
-- Checkpoints saved under `./dpo_checkpoints/dpo_adapter`
+- `DPO_BASE_MODEL_PATH` path to local model weights directory (preferred)
+- `ALLOW_HF_DOWNLOAD` set `true` to let trainer pull from HF using `DPO_BASE_MODEL_NAME`
+- `DPO_BASE_MODEL_NAME` HF id fallback if downloads allowed (default: `Qwen/Qwen1.5-7B-Chat`)
+- `DPO_CHECKPOINT_DIR` where LoRA checkpoints are saved (default: `./dpo_checkpoints`)
+- `DPO_LORA_ADAPTER_NAME` LoRA adapter subdir name (default: `dpo_adapter`)
 
 Integration note: The custom agent and trainer are decoupled from the AmongUs gameplay loop. Use `custom_agent.agent_play_turn()` within your own loop or data collection process to generate preference pairs, then run the trainer in parallel to adapt the model continuously.
 

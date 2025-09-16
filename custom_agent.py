@@ -6,10 +6,12 @@ from copy import deepcopy
 
 # --- Configuration ---
 # Backend server + model configuration (env-driven with sensible defaults)
-# Option A (default): vLLM at http://localhost:8000/v1 with Qwen1.5-7B-Chat
-# Option B: Ollama at http://localhost:11434 with model ollama/qwen:7b-chat
-api_base = os.getenv("LITELLM_API_BASE", "http://localhost:8000/v1")
-model = os.getenv("LITELLM_MODEL", "qwen/qwen1.5-7b-chat")
+# Default integrates with repo's LiteLLM proxy config.yaml at port 4000
+# Option A: LiteLLM proxy (default) -> api_base=http://localhost:4000, model=ollama/qwen:7b-chat
+# Option B: vLLM -> api_base=http://localhost:8000/v1, model=qwen/qwen1.5-7b-chat
+# Option C: Ollama direct -> api_base=http://localhost:11434, model=ollama/qwen:7b-chat
+api_base = os.getenv("LITELLM_API_BASE", "http://localhost:4000")
+model = os.getenv("LITELLM_MODEL", "ollama/qwen:7b-chat")
 api_key = os.getenv("LITELLM_API_KEY")
 client = litellm.completion
 

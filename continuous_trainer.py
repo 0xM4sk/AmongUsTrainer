@@ -10,27 +10,46 @@ import torch
 
 # --- Configuration ---
 LOG_FILE = os.getenv("CUSTOM_AGENT_LOG_FILE", "expt-logs/custom_agent_dataset.jsonl")
-CHECKPOINT_DIR = "./dpo_checkpoints"
-MODEL_NAME = "Qwen/Qwen1.5-7B-Chat"
-LORA_ADAPTER_NAME = "dpo_adapter"
-BUFFER_SIZE = 500  # Number of recent turns to keep in memory
-BATCH_SIZE = 8
-TRAINING_INTERVAL = 30 # seconds
+CHECKPOINT_DIR = os.getenv("DPO_CHECKPOINT_DIR", "./dpo_checkpoints")
+# Prefer a local model path to avoid remote downloads. If not set and ALLOW_HF_DOWNLOAD is not true, training waits.
+MODEL_PATH = os.getenv("DPO_BASE_MODEL_PATH")
+MODEL_NAME = os.getenv("DPO_BASE_MODEL_NAME", "Qwen/Qwen1.5-7B-Chat")
+ALLOW_HF_DOWNLOAD = os.getenv("ALLOW_HF_DOWNLOAD", "false").lower() in {"1", "true", "yes"}
+LORA_ADAPTER_NAME = os.getenv("DPO_LORA_ADAPTER_NAME", "dpo_adapter")
+BUFFER_SIZE = int(os.getenv("DPO_BUFFER_SIZE", "500"))  # Number of recent turns to keep in memory
+BATCH_SIZE = int(os.getenv("DPO_BATCH_SIZE", "8"))
+TRAINING_INTERVAL = int(os.getenv("DPO_TRAINING_INTERVAL", "30")) # seconds
 
 # --- DPO and Model Setup (runs once at startup) ---
-print("Loading base model and tokenizer...")
-bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4")
-base_model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, quantization_config=bnb_config)
-tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-if tokenizer.pad_token is None:
-    tokenizer.pad_token = tokenizer.eos_token
+def load_or_wait_for_model():
+    print("Preparing base model and tokenizer for DPO training...")
+    bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4")
 
-print("Initializing or loading LoRA adapter...")
-lora_config = LoraConfig(r=16, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj"])
-if os.path.exists(os.path.join(CHECKPOINT_DIR, LORA_ADAPTER_NAME)):
-    model = PeftModel.from_pretrained(base_model, os.path.join(CHECKPOINT_DIR, LORA_ADAPTER_NAME))
-else:
-    model = get_peft_model(base_model, lora_config)
+    model_source = None
+    if MODEL_PATH and os.path.exists(MODEL_PATH):
+        model_source = MODEL_PATH
+    elif ALLOW_HF_DOWNLOAD:
+        model_source = MODEL_NAME
+    else:
+        print("No local model path provided (DPO_BASE_MODEL_PATH), and ALLOW_HF_DOWNLOAD is not enabled.")
+        print("Continuous trainer will wait. Set DPO_BASE_MODEL_PATH to a local model directory or export ALLOW_HF_DOWNLOAD=true.")
+        return None, None
+
+    print(f"Loading model from: {model_source}")
+    base_model = AutoModelForCausalLM.from_pretrained(model_source, quantization_config=bnb_config)
+    tokenizer = AutoTokenizer.from_pretrained(model_source)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    print("Initializing or loading LoRA adapter...")
+    lora_config = LoraConfig(r=16, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj"])
+    adapter_path = os.path.join(CHECKPOINT_DIR, LORA_ADAPTER_NAME)
+    if os.path.exists(adapter_path):
+        model = PeftModel.from_pretrained(base_model, adapter_path)
+    else:
+        model = get_peft_model(base_model, lora_config)
+
+    return model, tokenizer
 
 # --- The Continuous DPO Loop ---
 experience_buffer = deque(maxlen=BUFFER_SIZE)
@@ -59,6 +78,8 @@ if __name__ == "__main__":
     print("Starting continuous DPO training service...")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+
+    model, tokenizer = load_or_wait_for_model()
     
     while True:
         try:
@@ -70,6 +91,12 @@ if __name__ == "__main__":
                 last_read_position = f.tell()
         except FileNotFoundError:
             print(f"Log file {LOG_FILE} not found. Waiting for agent to create it...")
+            time.sleep(TRAINING_INTERVAL)
+            continue
+
+        # If model isn't ready, retry load each interval
+        if model is None or tokenizer is None:
+            model, tokenizer = load_or_wait_for_model()
             time.sleep(TRAINING_INTERVAL)
             continue
 
