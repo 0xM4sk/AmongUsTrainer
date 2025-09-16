@@ -3,7 +3,7 @@ import os
 import time
 import sys
 from collections import deque
-from peft import PeftModel, LoraConfig, get_peft_model
+from peft import PeftModel, LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainingArguments
 from packaging.version import Version
 import transformers as _hf_tfm
@@ -52,6 +52,15 @@ def load_or_wait_for_model():
         trust_remote_code=True,
         device_map="auto",
     )
+    # Recommended setup for k-bit fine-tuning
+    try:
+        base_model = prepare_model_for_kbit_training(base_model)
+        if hasattr(base_model, "enable_input_require_grads"):
+            base_model.enable_input_require_grads()
+        if hasattr(base_model.config, "use_cache"):
+            base_model.config.use_cache = False
+    except Exception as e:
+        print(f"Warning: prepare_model_for_kbit_training failed: {e}")
     tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -86,7 +95,19 @@ def load_or_wait_for_model():
         pass
 
     print("Initializing or loading LoRA adapter...")
-    lora_config = LoraConfig(r=16, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj"])
+    # Cover common Qwen linear modules
+    target_modules = [
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj",
+    ]
+    lora_config = LoraConfig(
+        r=16,
+        lora_alpha=32,
+        target_modules=target_modules,
+        lora_dropout=0.05,
+        bias="none",
+        task_type="CAUSAL_LM",
+    )
     adapter_path = os.path.join(CHECKPOINT_DIR, LORA_ADAPTER_NAME)
     if os.path.exists(adapter_path):
         model = PeftModel.from_pretrained(base_model, adapter_path)
