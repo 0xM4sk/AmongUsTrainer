@@ -65,6 +65,54 @@ Run a local OpenAI-compatible proxy with LiteLLM and route to Ollama.
 
 You can still override models per run using CLI args `--crewmate_llm` and `--impostor_llm` with any LiteLLM-supported `provider/model` string.
 
+## Custom Agent + Continuous Trainer
+
+This repo includes a simple preference data generator (`custom_agent.py`) and a continuous DPO trainer (`continuous_trainer.py`) to fine-tune models based on agent gameplay-style preferences.
+
+### 1) Configure the LLM backend for `custom_agent.py`
+- Option A: vLLM (default in `custom_agent.py`)
+  - Start vLLM with a chat model, e.g.: `python -m vllm.entrypoints.openai.api_server --model Qwen/Qwen1.5-7B-Chat --port 8000`
+  - Env vars (optional):
+    - `LITELLM_API_BASE` (default: `http://localhost:8000/v1`)
+    - `LITELLM_MODEL` (default: `qwen/qwen1.5-7b-chat`)
+    - `LITELLM_API_KEY` if your backend requires it
+- Option B: Ollama
+  - `ollama pull qwen:7b-chat`
+  - Set env vars: `export LITELLM_API_BASE=http://localhost:11434` and `export LITELLM_MODEL=ollama/qwen:7b-chat`
+
+### 2) Generate preference data with `custom_agent.py`
+`custom_agent.agent_play_turn(game_state)` expects a `game_state` dict like:
+```
+game_state = {
+  "players_alive": ["A", "B", "C"],
+  "game_events": [{"event_type": "kill", "player_id": "B"}],
+  "discussion_log": [
+    {"player_id": "A", "message": "I was in Electrical."},
+    {"player_id": "B", "message": "idk"}
+  ]
+}
+```
+You can call it from a script/notebook to append JSONL rows to `expt-logs/custom_agent_dataset.jsonl`:
+```
+from custom_agent import agent_play_turn
+message, vote = agent_play_turn(game_state)
+```
+The file is created automatically if missing.
+
+### 3) Start the continuous DPO trainer
+`continuous_trainer.py` tails `expt-logs/custom_agent_dataset.jsonl` and periodically runs DPO fine-tuning on the most recent samples.
+
+- Install training deps (already in `requirements.txt`): `transformers`, `trl`, `peft`, `datasets`, `bitsandbytes`, `accelerate`.
+- Ensure GPU drivers and CUDA are available if training on GPU.
+- Run: `python continuous_trainer.py`
+
+Environment/config knobs:
+- `CUSTOM_AGENT_LOG_FILE` to override the log path (default: `expt-logs/custom_agent_dataset.jsonl`)
+- `MODEL_NAME` inside `continuous_trainer.py` to change the base model for training
+- Checkpoints saved under `./dpo_checkpoints/dpo_adapter`
+
+Integration note: The custom agent and trainer are decoupled from the AmongUs gameplay loop. Use `custom_agent.agent_play_turn()` within your own loop or data collection process to generate preference pairs, then run the trainer in parallel to adapt the model continuously.
+
 ## Deception ELO
 
 After running (or downloading) the games, to reproduce our Deception ELO results, run the following notebook:

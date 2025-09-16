@@ -175,3 +175,9 @@ websockets==15.0.1
 passlib==1.7.4
 streamlit==1.44.1
 litellm>=1.43.0
+transformers>=4.45.0
+peft>=0.13.2
+trl>=0.9.6
+datasets>=3.1.0
+bitsandbytes>=0.45.0
+accelerate>=1.0.1
