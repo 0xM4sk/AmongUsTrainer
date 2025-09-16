@@ -109,6 +109,9 @@ This will populate `expt-logs/custom_agent_dataset.jsonl`, which the trainer wil
 `continuous_trainer.py` tails `expt-logs/custom_agent_dataset.jsonl` and periodically runs DPO fine-tuning on the most recent samples.
 
 - Install training deps (already in `requirements.txt`): `transformers`, `trl`, `peft`, `datasets`, `bitsandbytes`, `accelerate`.
+- Version pins for trainer compatibility:
+  - `trl==0.9.6`, `transformers==4.45.2`, `peft==0.13.2`, `accelerate==1.0.1`
+  - Reinstall to apply pins: `pip install -r requirements.txt --upgrade --no-cache-dir`
 - Ensure GPU drivers and CUDA are available if training on GPU.
 - Provide a local model directory to avoid remote downloads:
   - `export DPO_BASE_MODEL_PATH=/path/to/local/Qwen1.5-7B-Chat`
