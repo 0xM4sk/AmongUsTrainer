@@ -1,0 +1,17 @@
+# LiteLLM Proxy configuration for using Ollama Qwen locally
+#
+# Start Ollama locally and pull the model:
+#   ollama pull qwen:7b-chat
+# Run LiteLLM proxy:
+#   litellm --config config.yaml --port 4000
+# Your app can then point to the proxy using:
+#   export LITELLM_API_BASE=http://localhost:4000
+#   export LITELLM_MODEL=ollama/qwen:7b-chat
+
+model_list:
+  - model_name: ollama/qwen:7b-chat
+    litellm_params:
+      model: ollama/qwen:7b-chat
+      api_base: http://localhost:11434
+      # api_key not required for Ollama
+

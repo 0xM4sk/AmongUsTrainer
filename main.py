@@ -35,7 +35,12 @@ COMMIT_HASH = (
     subprocess.check_output(["git", "rev-parse", "HEAD"]).strip().decode("utf-8")
 )
 
+# Default to LiteLLM with qwen:7b-chat via Ollama; can be overridden via env
+DEFAULT_LITELLM_MODEL = os.getenv("LITELLM_MODEL", "ollama/qwen:7b-chat")
+
 BIG_LIST_OF_MODELS: List[str] = [
+    DEFAULT_LITELLM_MODEL,
+    # Additional models supported by LiteLLM (require proper API keys)
     "anthropic/claude-3.5-sonnet",
     "anthropic/claude-3-opus",
     "anthropic/claude-3.7-sonnet:thinking",
@@ -66,8 +71,9 @@ ARGS = {
     "agent_config": {
         "Impostor": "LLM",
         "Crewmate": "LLM",
-        "IMPOSTOR_LLM_CHOICES": BIG_LIST_OF_MODELS,
-        "CREWMATE_LLM_CHOICES": BIG_LIST_OF_MODELS,
+        # Default to qwen:7b-chat via LiteLLM; override with CLI or env
+        "IMPOSTOR_LLM_CHOICES": [DEFAULT_LITELLM_MODEL],
+        "CREWMATE_LLM_CHOICES": [DEFAULT_LITELLM_MODEL],
     },
     "UI": False,
 }
@@ -121,4 +127,6 @@ if __name__ == "__main__":
     if args.impostor_llm:
         ARGS["agent_config"]["IMPOSTOR_LLM_CHOICES"] = [args.impostor_llm]
     ARGS["tournament_style"] = args.tournament_style
+    # Keep Streamlit setting available for utils/setup and other modules
+    ARGS["Streamlit"] = bool(args.streamlit)
     asyncio.run(multiple_games(experiment_name=args.name, num_games=args.num_games))

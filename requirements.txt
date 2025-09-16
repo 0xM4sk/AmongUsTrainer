@@ -174,3 +174,4 @@ flask==3.1.0
 websockets==15.0.1
 passlib==1.7.4
 streamlit==1.44.1
+litellm>=1.43.0

@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from typing import Any, List, Dict, Tuple
 import aiohttp
+from litellm import acompletion
 import time
 import numpy as np
 import requests
@@ -54,8 +55,11 @@ class LLMAgent(Agent):
         self.system_prompt = system_prompt
         self.model = model
         self.temperature = 0.7
-        self.api_key = os.getenv("OPENROUTER_API_KEY")
-        self.api_url = "https://openrouter.ai/api/v1/chat/completions"
+        # LiteLLM configuration (env-driven)
+        # Example defaults assume an Ollama server for qwen:7b-chat
+        # Set env LITELLM_MODEL / LITELLM_API_BASE / LITELLM_API_KEY as needed
+        self.litellm_api_base = os.getenv("LITELLM_API_BASE")
+        self.litellm_api_key = os.getenv("LITELLM_API_KEY")
         self.summarization = "No thought process has been made."
         self.processed_memory = "No memory has been processed."
         self.chat_history = []
@@ -160,39 +164,34 @@ class LLMAgent(Agent):
         print(".", end="", flush=True)
 
     async def send_request(self, messages):
-        """Send a POST request to OpenRouter API with the provided messages."""
-        headers = {"Authorization": f"Bearer {self.api_key}"}
-        payload = {
+        """Send a chat completion via LiteLLM for the configured model."""
+        # Build kwargs for LiteLLM call
+        kwargs = {
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature,
-            "top_p": 1,
-            "frequency_penalty": 0,
-            "presence_penalty": 0,
-            "repetition_penalty": 1,
-            "top_k": 0,
         }
-        
-        async with aiohttp.ClientSession() as session:
-            for attempt in range(10):
-                try:
-                    async with session.post(self.api_url, headers=headers, data=json.dumps(payload)) as response:
-                        if response is None:
-                            print(f"API request failed: response is None for {self.model}.")
-                            continue
-                        if response.status == 200:
-                            data = await response.json()
-                            if "choices" not in data:
-                                print(f"API request failed: 'choices' key not in response for {self.model}.")
-                                continue
-                            if not data["choices"]:
-                                print(f"API request failed: 'choices' key is empty in response for {self.model}.")
-                                continue
-                            return data["choices"][0]["message"]["content"]
-                except Exception as e:
-                    print(f"API request failed. Retrying... ({attempt + 1}/10) for {self.model}.")
+        if self.litellm_api_base:
+            kwargs["api_base"] = self.litellm_api_base
+        if self.litellm_api_key:
+            kwargs["api_key"] = self.litellm_api_key
+
+        for attempt in range(10):
+            try:
+                resp = await acompletion(**kwargs)
+                if not hasattr(resp, "choices") or not resp.choices:
+                    print(f"LiteLLM response missing choices for {self.model} (attempt {attempt+1}).")
                     continue
-            return 'SPEAK: ...'
+                content = getattr(resp.choices[0].message, "content", None)
+                if not content:
+                    print(f"LiteLLM response had empty content for {self.model} (attempt {attempt+1}).")
+                    continue
+                return content
+            except Exception as e:
+                print(f"LiteLLM request failed. Retrying... ({attempt + 1}/10) for {self.model}. Error: {e}")
+                await asyncio.sleep(min(1 + attempt * 0.5, 5))
+                continue
+        return 'SPEAK: ...'
 
     def respond(self, message):
         all_info = self.player.all_info_prompt()

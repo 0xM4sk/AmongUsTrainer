@@ -38,6 +38,33 @@ You will need to add a `.env` file with an [OpenRouter](https://openrouter.ai/) 
 
 Alternatively, you can download 400 full-game logs (for `Phi-4-15b` and `Llama-3.3-70b-instruct`) and 810 game summaries from the [HuggingFace](https://huggingface.co/datasets/7vik/AmongUs) dataset to reproduce the results in the paper (and evaluate your own techniques!).
 
+## LiteLLM + Qwen (Default)
+
+This repo uses [LiteLLM](https://github.com/BerriAI/litellm) for LLM calls. By default, both Crewmate and Impostor agents use `ollama/qwen:7b-chat`.
+
+### Option A: Direct to Ollama
+- Install and start Ollama, then pull the model:
+  - `ollama pull qwen:7b-chat`
+- Optional env vars for the game:
+  - `LITELLM_MODEL` (default: `ollama/qwen:7b-chat`)
+  - `LITELLM_API_BASE` (Ollama default: `http://localhost:11434`)
+  - `LITELLM_API_KEY` (not required for Ollama)
+
+### Option B: Via LiteLLM Proxy
+Run a local OpenAI-compatible proxy with LiteLLM and route to Ollama.
+
+1) Ensure Ollama is running and the model is available:
+   - `ollama pull qwen:7b-chat`
+
+2) Launch the LiteLLM proxy using the provided configuration:
+   - `litellm --config config.yaml --port 4000`
+
+3) Point the game to the proxy (OpenAI-compatible endpoint):
+   - `export LITELLM_API_BASE=http://localhost:4000`
+   - `export LITELLM_MODEL=ollama/qwen:7b-chat`
+
+You can still override models per run using CLI args `--crewmate_llm` and `--impostor_llm` with any LiteLLM-supported `provider/model` string.
+
 ## Deception ELO
 
 After running (or downloading) the games, to reproduce our Deception ELO results, run the following notebook:
