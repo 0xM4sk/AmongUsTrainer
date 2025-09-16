@@ -114,7 +114,7 @@ if __name__ == "__main__":
             dpo_dataset = create_dpo_dataset(mini_batch_data)
             
             if HAS_DPO_CONFIG and DPOConfig is not None:
-                # Use the modern TRL config API
+                # Use the modern TRL config API; pass only broadly-supported fields
                 dpo_args = DPOConfig(
                     output_dir=CHECKPOINT_DIR,
                     per_device_train_batch_size=BATCH_SIZE,
@@ -123,13 +123,22 @@ if __name__ == "__main__":
                     logging_steps=1,
                     fp16=True,
                     beta=0.1,
-                    padding_value=-100,
-                    truncation_side="right",
-                    max_length=1024,
-                    max_prompt_length=512,
-                    max_target_length=512,
                     report_to=None,
                 )
+                # Set optional fields only if present on this TRL version
+                optional_fields = {
+                    "padding_value": -100,
+                    "truncation_side": "right",
+                    "max_length": 1024,
+                    "max_prompt_length": 512,
+                    "max_target_length": 512,
+                }
+                for k, v in optional_fields.items():
+                    if hasattr(dpo_args, k):
+                        try:
+                            setattr(dpo_args, k, v)
+                        except Exception:
+                            pass
                 dpo_trainer = DPOTrainer(
                     model=model,
                     ref_model=None,
