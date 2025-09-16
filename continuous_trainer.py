@@ -33,7 +33,7 @@ TRAINING_INTERVAL = int(os.getenv("DPO_TRAINING_INTERVAL", "30")) # seconds
 # --- DPO and Model Setup (runs once at startup) ---
 def load_or_wait_for_model():
     print("Preparing base model and tokenizer for DPO training...")
-    quant_mode = os.getenv("DPO_QUANTIZATION", "4bit").lower()
+    quant_mode = os.getenv("DPO_QUANTIZATION", "none").lower()
     bnb_config = None
     if quant_mode in {"4bit", "4", "four"}:
         bnb_config = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4")

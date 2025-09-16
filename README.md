@@ -119,8 +119,9 @@ This will populate `expt-logs/custom_agent_dataset.jsonl`, which the trainer wil
 - Run: `python continuous_trainer.py`
 
 - Quantization options:
-  - `DPO_QUANTIZATION=4bit` (default, nf4), `8bit`, or `none` (bf16 if available)
-  - If you see CUDA index asserts, try `DPO_QUANTIZATION=8bit` or `none` to rule out 4-bit issues.
+  - `DPO_QUANTIZATION=none` (default, bf16 if available), or `8bit`, or `4bit` (nf4)
+  - If you see CUDA index asserts on 4-bit, prefer `8bit` or `none`.
+  - If you hit PEFT/bitsandbytes errors on 8-bit, update deps (`pip install -r requirements.txt --upgrade --no-cache-dir`).
 
 - Debug/safety:
   - `DPO_SAFE_MODE=1` sets batch size to 1 and disables fp16
