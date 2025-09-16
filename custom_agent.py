@@ -3,6 +3,8 @@ import os
 import random
 import litellm
 from copy import deepcopy
+import argparse
+import time
 
 # --- Configuration ---
 # Backend server + model configuration (env-driven with sensible defaults)
@@ -16,7 +18,10 @@ api_key = os.getenv("LITELLM_API_KEY")
 client = litellm.completion
 
 # Path to the log file for the continuous trainer
-LOG_FILE_PATH = os.path.join(os.getcwd(), "expt-logs", "custom_agent_dataset.jsonl")
+LOG_FILE_PATH = os.getenv(
+    "CUSTOM_AGENT_LOG_FILE",
+    os.path.join(os.getcwd(), "expt-logs", "custom_agent_dataset.jsonl"),
+)
 os.makedirs(os.path.dirname(LOG_FILE_PATH), exist_ok=True)
 
 # --- Heuristic Logic (As per previous discussions) ---
@@ -139,3 +144,50 @@ def agent_play_turn(game_state):
     vote = preference_pair["chosen"]["vote"]
     
     return message, vote
+
+
+def _random_game_state(n_players: int = 5) -> dict:
+    players = [chr(ord('A') + i) for i in range(n_players)]
+    events = []
+    # randomly add a kill event
+    if random.random() < 0.5 and n_players > 1:
+        events.append({"event_type": "kill", "player_id": random.choice(players)})
+    discussion = []
+    for p in players:
+        utter = random.choice([
+            "I was in Electrical.",
+            "idk",
+            "Where was the body?",
+            "shutup",
+            "I fixed O2.",
+            "Saw C near Nav.",
+        ])
+        discussion.append({"player_id": p, "message": utter})
+    return {
+        "players_alive": players,
+        "game_events": events,
+        "discussion_log": discussion,
+    }
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Custom agent data generator")
+    parser.add_argument("--generate", type=int, default=0, help="Number of synthetic turns to generate")
+    parser.add_argument("--sleep", type=float, default=0.0, help="Seconds to sleep between generations")
+    parser.add_argument("--players", type=int, default=5, help="Players in synthetic game state")
+    args = parser.parse_args()
+
+    if args.generate > 0:
+        print(f"Generating {args.generate} entries into {LOG_FILE_PATH}")
+        for i in range(args.generate):
+            gs = _random_game_state(args.players)
+            try:
+                message, vote = agent_play_turn(gs)
+                print(f"[{i+1}/{args.generate}] chosen message='{message[:50]}...' vote='{vote}'")
+            except Exception as e:
+                print(f"Error on generation {i+1}: {e}")
+            if args.sleep > 0:
+                time.sleep(args.sleep)
+        print("Done.")
+    else:
+        print("No --generate count provided. Import agent_play_turn() or pass --generate.")

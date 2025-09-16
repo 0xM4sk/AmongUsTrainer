@@ -96,6 +96,12 @@ message, vote = agent_play_turn(game_state)
 ```
 The file is created automatically if missing.
 
+Or generate synthetic entries from the CLI (uses the LiteLLM proxy by default):
+```
+python custom_agent.py --generate 10 --sleep 0.5 --players 5
+```
+This will populate `expt-logs/custom_agent_dataset.jsonl`, which the trainer will tail.
+
 ### 3) Start the continuous DPO trainer
 `continuous_trainer.py` tails `expt-logs/custom_agent_dataset.jsonl` and periodically runs DPO fine-tuning on the most recent samples.
 
