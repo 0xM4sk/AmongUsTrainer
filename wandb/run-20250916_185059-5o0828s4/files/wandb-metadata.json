@@ -1,0 +1,39 @@
+{
+  "os":  "Linux-5.15.167.4-microsoft-standard-WSL2-x86_64-with-glibc2.36",
+  "python":  "CPython 3.10.18",
+  "startedAt":  "2025-09-16T22:50:59.397156Z",
+  "program":  "/home/baseline/AmongUsTrainer/continuous_trainer.py",
+  "codePath":  "continuous_trainer.py",
+  "codePathLocal":  "continuous_trainer.py",
+  "git":  {
+    "remote":  "https://github.com/0xM4sk/AmongUsTrainer",
+    "commit":  "f63dfa31eb65807074070706c1c5f8f888292d43"
+  },
+  "email":  "bwhite@itc-hq.com",
+  "root":  "/home/baseline/AmongUsTrainer",
+  "host":  "DESKTOP-5O3P3T3",
+  "executable":  "/home/baseline/miniconda3/envs/amongus/bin/python",
+  "cpu_count":  14,
+  "cpu_count_logical":  28,
+  "gpu":  "NVIDIA GeForce RTX 4070",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "1081101176832",
+      "used":  "244273512448"
+    }
+  },
+  "memory":  {
+    "total":  "50426683392"
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA GeForce RTX 4070",
+      "memoryTotal":  "12878610432",
+      "architecture":  "Ada",
+      "uuid":  "GPU-2c4dc18b-0136-2567-2fa0-31c1cef400ac"
+    }
+  ],
+  "cudaVersion":  "13.0",
+  "writerId":  "2c0cttxnegp5jdmazofxftchyilwsfsw"
+}

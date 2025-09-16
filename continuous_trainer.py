@@ -50,6 +50,12 @@ def load_or_wait_for_model():
     tokenizer = AutoTokenizer.from_pretrained(model_source)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+    # Ensure consistent padding/truncation sides for chat templates
+    try:
+        tokenizer.padding_side = "right"
+        tokenizer.truncation_side = "right"
+    except Exception:
+        pass
 
     print("Initializing or loading LoRA adapter...")
     lora_config = LoraConfig(r=16, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj"])
@@ -96,6 +102,9 @@ if __name__ == "__main__":
             sys.exit(1)
     except Exception:
         pass
+    # Optional debug: enable CUDA_LAUNCH_BLOCKING to get precise stacktraces on CUDA errors
+    if os.getenv("DPO_DEBUG", "0") in {"1", "true", "True"}:
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "1"
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
@@ -141,6 +150,7 @@ if __name__ == "__main__":
                 # Set optional fields only if present on this TRL version
                 optional_fields = {
                     "padding_value": -100,
+                    "label_pad_token_id": -100,
                     "truncation_side": "right",
                     "max_length": 1024,
                     "max_prompt_length": 512,
@@ -171,6 +181,12 @@ if __name__ == "__main__":
                     fp16=True,
                     disable_tqdm=True,
                 )
+                # Avoid column pruning which can interfere with TRL processors
+                if not hasattr(training_args, "remove_unused_columns"):
+                    try:
+                        setattr(training_args, "remove_unused_columns", False)
+                    except Exception:
+                        pass
                 try:
                     dpo_trainer = DPOTrainer(
                         model=model,
