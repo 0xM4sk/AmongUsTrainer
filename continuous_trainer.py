@@ -46,14 +46,42 @@ def load_or_wait_for_model():
         return None, None
 
     print(f"Loading model from: {model_source}")
-    base_model = AutoModelForCausalLM.from_pretrained(model_source, quantization_config=bnb_config)
-    tokenizer = AutoTokenizer.from_pretrained(model_source)
+    base_model = AutoModelForCausalLM.from_pretrained(
+        model_source,
+        quantization_config=bnb_config,
+        trust_remote_code=True,
+        device_map="auto",
+    )
+    tokenizer = AutoTokenizer.from_pretrained(model_source, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     # Ensure consistent padding/truncation sides for chat templates
     try:
         tokenizer.padding_side = "right"
         tokenizer.truncation_side = "right"
+        # Cap tokenizer max length to model capacity
+        model_max_len = getattr(base_model.config, "max_position_embeddings", None)
+        if model_max_len is not None:
+            tokenizer.model_max_length = int(model_max_len)
+    except Exception:
+        pass
+
+    # Ensure model embeddings cover tokenizer vocab (avoid OOB indices on CUDA)
+    try:
+        model_vocab = base_model.get_input_embeddings().weight.shape[0]
+        tok_vocab = len(tokenizer)
+        if tok_vocab > model_vocab:
+            print(f"Resizing token embeddings: model_vocab={model_vocab} -> tok_vocab={tok_vocab}")
+            base_model.resize_token_embeddings(tok_vocab)
+    except Exception as e:
+        print(f"Warning: could not verify/resize token embeddings: {e}")
+
+    # Sanity check tokenizer/model vocab agreement
+    try:
+        model_vocab = getattr(base_model.config, "vocab_size", None)
+        tok_vocab = getattr(tokenizer, "vocab_size", None)
+        if model_vocab is not None and tok_vocab is not None and tok_vocab > model_vocab:
+            print(f"Warning: tokenizer vocab ({tok_vocab}) > model vocab ({model_vocab}). This can cause index errors.")
     except Exception:
         pass
 
@@ -64,6 +92,36 @@ def load_or_wait_for_model():
         model = PeftModel.from_pretrained(base_model, adapter_path)
     else:
         model = get_peft_model(base_model, lora_config)
+
+    class _SafeForward(torch.nn.Module):
+        def __init__(self, inner_model):
+            super().__init__()
+            self.inner = inner_model
+            try:
+                self.max_token_id = self.inner.get_input_embeddings().weight.shape[0] - 1
+            except Exception:
+                self.max_token_id = None
+
+        def forward(self, input_ids=None, attention_mask=None, position_ids=None, **kwargs):
+            try:
+                if input_ids is not None and self.max_token_id is not None:
+                    with torch.no_grad():
+                        max_id = torch.max(input_ids).item()
+                        min_id = torch.min(input_ids).item()
+                        if max_id > self.max_token_id or min_id < 0:
+                            print(f"[SafeForward] Clamping token ids (min={min_id}, max={max_id}, limit={self.max_token_id})")
+                        input_ids = torch.clamp(input_ids, 0, self.max_token_id)
+                if attention_mask is not None:
+                    attention_mask = (attention_mask > 0).to(dtype=attention_mask.dtype)
+                if position_ids is not None and input_ids is not None:
+                    seq_len = input_ids.shape[-1]
+                    position_ids = torch.clamp(position_ids, 0, max(seq_len - 1, 0))
+            except Exception as e:
+                print(f"[SafeForward] Warning during input sanitation: {e}")
+            return self.inner(input_ids=input_ids, attention_mask=attention_mask, position_ids=position_ids, **kwargs)
+
+    # Wrap model to guard against OOB indices causing CUDA asserts
+    model = _SafeForward(model)
 
     return model, tokenizer
 
@@ -137,13 +195,21 @@ if __name__ == "__main__":
             
             if HAS_DPO_CONFIG and DPOConfig is not None:
                 # Use the modern TRL config API; pass only broadly-supported fields
+                safe_mode = os.getenv("DPO_SAFE_MODE", "0") in {"1", "true", "True"}
+                per_device_bs = 1 if safe_mode else BATCH_SIZE
+                use_fp16 = False if safe_mode else True
+                # Derive conservative lengths from model capacity
+                model_max_len = getattr(model.config, "max_position_embeddings", 2048)
+                desired_max_len = min(1024, int(model_max_len))
+                desired_prompt_len = min(512, desired_max_len // 2)
+                desired_target_len = desired_max_len - desired_prompt_len
                 dpo_args = DPOConfig(
                     output_dir=CHECKPOINT_DIR,
-                    per_device_train_batch_size=BATCH_SIZE,
+                    per_device_train_batch_size=per_device_bs,
                     num_train_epochs=1,
                     learning_rate=5e-5,
                     logging_steps=1,
-                    fp16=True,
+                    fp16=use_fp16,
                     beta=0.1,
                     report_to=None,
                 )
@@ -152,9 +218,9 @@ if __name__ == "__main__":
                     "padding_value": -100,
                     "label_pad_token_id": -100,
                     "truncation_side": "right",
-                    "max_length": 1024,
-                    "max_prompt_length": 512,
-                    "max_target_length": 512,
+                    "max_length": desired_max_len,
+                    "max_prompt_length": desired_prompt_len,
+                    "max_target_length": desired_target_len,
                 }
                 for k, v in optional_fields.items():
                     if hasattr(dpo_args, k):
@@ -171,14 +237,17 @@ if __name__ == "__main__":
                 )
             else:
                 # Fallback for older TRL versions expecting TrainingArguments
+                safe_mode = os.getenv("DPO_SAFE_MODE", "0") in {"1", "true", "True"}
+                per_device_bs = 1 if safe_mode else BATCH_SIZE
+                use_fp16 = False if safe_mode else True
                 training_args = TrainingArguments(
                     output_dir=CHECKPOINT_DIR,
-                    per_device_train_batch_size=BATCH_SIZE,
+                    per_device_train_batch_size=per_device_bs,
                     num_train_epochs=1,
                     learning_rate=5e-5,
                     save_strategy="epoch",
                     logging_steps=1,
-                    fp16=True,
+                    fp16=use_fp16,
                     disable_tqdm=True,
                 )
                 # Avoid column pruning which can interfere with TRL processors
