@@ -106,22 +106,34 @@ if __name__ == "__main__":
             mini_batch_data = list(experience_buffer)
             dpo_dataset = create_dpo_dataset(mini_batch_data)
             
-            dpo_trainer = DPOTrainer(
-                model=model,
-                ref_model=None,
-                train_dataset=dpo_dataset,
-                tokenizer=tokenizer,
-                args=TrainingArguments(
-                    output_dir=CHECKPOINT_DIR,
-                    per_device_train_batch_size=BATCH_SIZE,
-                    num_train_epochs=1,
-                    learning_rate=5e-5,
-                    save_strategy="epoch",
-                    logging_steps=1,
-                    fp16=True,
-                    disable_tqdm=True,
-                )
+            # Build TrainingArguments once
+            training_args = TrainingArguments(
+                output_dir=CHECKPOINT_DIR,
+                per_device_train_batch_size=BATCH_SIZE,
+                num_train_epochs=1,
+                learning_rate=5e-5,
+                save_strategy="epoch",
+                logging_steps=1,
+                fp16=True,
+                disable_tqdm=True,
             )
+
+            # Be compatible across TRL versions: try with tokenizer, then fallback
+            try:
+                dpo_trainer = DPOTrainer(
+                    model=model,
+                    ref_model=None,
+                    train_dataset=dpo_dataset,
+                    tokenizer=tokenizer,
+                    args=training_args,
+                )
+            except TypeError:
+                dpo_trainer = DPOTrainer(
+                    model=model,
+                    ref_model=None,
+                    train_dataset=dpo_dataset,
+                    args=training_args,
+                )
             
             dpo_trainer.train()
             dpo_trainer.save_model(os.path.join(CHECKPOINT_DIR, LORA_ADAPTER_NAME))
